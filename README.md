@@ -2,27 +2,6 @@
 
 Arquitectura de microservicios para gestión de pedidos y productos usando Spring Boot, Spring Cloud y Docker.
 
-## Arquitectura
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   API Gateway   │────│  Eureka Server  │────│  Config Server  │
-│     (8083)      │    │     (8761)      │    │     (8888)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │     PostgreSQL (5432)    │
-                    │       syncap DB          │
-                    └──────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │    MS-Productos (8081)   │
-                    │   CRUD productos/stock   │
-                    └──────────────────────────┘
-```
-
 ## Servicios
 
 - **API Gateway**: Enrutamiento y balanceo de carga
@@ -104,48 +83,6 @@ docker-compose up --build
 
 # Solo servicios específicos
 docker-compose up gateway ms-productos
-```
-
-## Estructura del Proyecto
-
-```
-sistema-pedidos/
-├── config-repo/           # Configuraciones centralizadas
-│   ├── *.yaml            # Configs por servicio y perfil
-│   └── README.md         # Documentación de configs
-├── gateway/              # API Gateway
-├── ms-config-server/     # Servidor de configuración
-├── ms-product/           # Microservicio productos
-├── registry-service/     # Eureka Server
-├── docker-compose.yml    # Orquestación Docker
-└── README.md            # Este archivo
-```
-
-## Solución de Problemas
-
-### Puerto 5432 ocupado
-```bash
-# Detener PostgreSQL local
-sudo service postgresql stop
-
-# O cambiar puerto en docker-compose.yml
-ports:
-  - "5433:5432"
-```
-
-### Servicios no inician
-```bash
-# Ver logs específicos
-docker-compose logs ms-productos
-
-# Reconstruir imagen
-docker-compose build ms-productos
-```
-
-### Configuraciones no cargan
-```bash
-# Verificar config server
-curl http://localhost:8888/ms-productos/docker
 ```
 
 ## Notas de Desarrollo
