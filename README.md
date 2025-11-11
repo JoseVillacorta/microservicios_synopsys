@@ -4,10 +4,11 @@ Arquitectura de microservicios para gestión de pedidos y productos usando Sprin
 
 ## Servicios
 
-- **API Gateway**: Enrutamiento y balanceo de carga
+- **API Gateway**: Enrutamiento, balanceo de carga y autenticación OAuth2
 - **Eureka Server**: Registro y descubrimiento de servicios
 - **Config Server**: Configuración centralizada
-- **MS-Productos**: Gestión de catálogo de productos
+- **MS-Productos**: Gestión de catálogo de productos con OAuth2 Resource Server
+- **OAuth Server**: Authorization Server OAuth2 con JWT
 - **PostgreSQL**: Base de datos principal
 
 ## Inicio Rápido
@@ -37,17 +38,26 @@ docker-compose logs [service-name]
 ## Endpoints Principales
 
 ### API Gateway (puerto 8083)
-- `GET /productos` → Listar productos
-- `POST /productos` → Crear producto
-- `GET /productos/{id}` → Obtener producto
-- `PUT /productos/{id}` → Actualizar producto
-- `DELETE /productos/{id}` → Eliminar producto
+- `GET /oauth2/authorization/oauth-client` → Iniciar flujo OAuth2
+- `GET /authorized` → Callback OAuth2 (maneja tokens)
+- `GET /productos` → Listar productos (requiere autenticación)
+- `POST /productos` → Crear producto (requiere autenticación)
+- `GET /productos/{id}` → Obtener producto (requiere autenticación)
+- `PUT /productos/{id}` → Actualizar producto (requiere autenticación)
+- `DELETE /productos/{id}` → Eliminar producto (requiere autenticación)
 
 ### Eureka Dashboard (puerto 8761)
 - `http://localhost:8761` → Ver servicios registrados
 
 ### Config Server (puerto 8888)
 - `http://localhost:8888/{service}/docker` → Ver configuración
+- `http://localhost:8888/oauth-server/docker` → Config OAuth2
+
+### OAuth Server (puerto 9000)
+- `http://localhost:9000/oauth2/authorize` → Autorización OAuth2
+- `http://localhost:9000/oauth2/token` → Obtener tokens JWT
+- `http://localhost:9000/oauth2/jwks` → Claves públicas JWT
+- `http://localhost:9000/userinfo` → Información del usuario
 
 ## Configuración Docker
 
@@ -73,10 +83,9 @@ Cada servicio incluye health checks automáticos:
 # Iniciar servicios individualmente
 ./gradlew bootRun  # En cada directorio
 
-# O usar IDE con perfil 'dev'
 ```
 
-### Con Docker (Recomendado)
+### Con Docker
 ```bash
 # Desarrollo completo
 docker-compose up --build
@@ -92,9 +101,28 @@ docker-compose up gateway ms-productos
 - Health checks aseguran dependencias antes de iniciar servicios
 - Configuraciones se recargan automáticamente desde config-repo/
 
-## Próximas Funcionalidades
+## Autenticación OAuth2
 
-- MS-Pedidos: Gestión de órdenes de compra
-- Autenticación/Autorización con OAuth2
-- Monitoreo con Spring Boot Actuator + Prometheus
-- Logs centralizados con ELK Stack
+### Flujo de Autenticación
+1. **Inicio**: `http://localhost:8083/oauth2/authorization/oauth-client`
+2. **Login**: Usuario `jose` / Password `123456`
+3. **Autorización**: Otorgar permisos (openid, profile)
+4. **Callback**: Redirección automática a aplicación
+5. **Acceso**: API protegida con Bearer Token JWT
+
+### Credenciales OAuth2
+- **Usuario**: `jose` / `123456`
+- **Cliente**: `oauth-client` / `12345678910`
+- **Scopes**: `openid`, `profile`, `read`, `write`
+
+### Testing con Postman
+```bash
+# 1. Obtener token (Password Grant)
+POST http://localhost:9000/oauth2/token
+Authorization: Basic Auth (oauth-client / 12345678910)
+Body: grant_type=password&username=jose&password=123456&scope=read
+
+# 2. Usar token en API
+GET http://localhost:8081/resources/user
+Authorization: Bearer [access_token]
+```
