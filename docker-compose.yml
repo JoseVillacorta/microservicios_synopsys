@@ -1,17 +1,86 @@
 services:
-  # Base de datos PostgreSQL
-  db:
-    image: postgres:15
-    container_name: postgres-db
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
     environment:
-      POSTGRES_DB: syncap
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - microservicios
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - microservicios
+
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+
+  # Base de datos PostgreSQL para productos
+  db_productos:
+    image: postgres:15
+    restart: unless-stopped
+    container_name: db_productos
+    environment:
+      POSTGRES_DB: db_productos_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: admin
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./ms-product/database/script.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data_productos:/var/lib/postgresql/data
+      - ./ms-productos-v2/database/script.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+     test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservicios
+
+  # Base de datos PostgreSQL para pedidos
+  db_pedidos:
+    image: postgres:15
+    restart: unless-stopped
+    container_name: db_pedidos
+    environment:
+      POSTGRES_DB: db_pedidos_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data_pedidos:/var/lib/postgresql/data
+      - ./ms-pedidos/database/script.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -20,34 +89,27 @@ services:
     networks:
       - microservicios
 
-  # Eureka Server
   registry-service:
-    build: ./registry-service
+    build:
+      context: .
+      dockerfile: ./registry-service/Dockerfile
     container_name: registry-service
     ports:
       - "8761:8761"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8761"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+      - SPRING_PROFILES_ACTIVE=dev
     networks:
       - microservicios
 
-  # Config Server
   ms-config-server:
-    build: ./ms-config-server
+    build:
+      context: .
+      dockerfile: ./ms-config-server/Dockerfile
     container_name: config-server
     ports:
       - "8888:8888"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
       - PROPERTIES_DIRECTORY=/config-repo
     volumes:
       - ./config-repo:/config-repo
@@ -63,23 +125,53 @@ services:
     networks:
       - microservicios
 
-  # Microservicio de Productos
-  ms-productos:
-    build: ./ms-product
-    container_name: ms-productos
+  gateway:
+    build:
+      context: .
+      dockerfile: ./gateway/Dockerfile
+    container_name: gateway-service
     ports:
-      - "8081:8081"
+      - "8080:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
     depends_on:
-      db:
+      ms-config-server:
+        condition: service_healthy
+      registry-service:
+        condition: service_healthy
+      ms-pedidos:
+        condition: service_healthy
+      ms-productos-v2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 100s
+    networks:
+      - microservicios
+
+  ms-pedidos:
+    build:
+      context: .
+      dockerfile: ./ms-pedidos/Dockerfile
+    container_name: ms-pedidos
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    depends_on:
+      db_pedidos:
         condition: service_healthy
       ms-config-server:
         condition: service_healthy
       registry-service:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8081/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8082/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -87,56 +179,43 @@ services:
     networks:
       - microservicios
 
-  # API Gateway
-  gateway:
-    build: ./gateway
-    container_name: gateway-service
+  ms-productos:
+    build:
+      context: .
+      dockerfile: ./ms-productos/Dockerfile
+    container_name: ms-productos
     ports:
-      - "8083:8083"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - "8081:8081"
     depends_on:
-      ms-config-server:
-        condition: service_healthy
-      registry-service:
-        condition: service_healthy
-      ms-productos:
-        condition: service_healthy
-      oauth-server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 100s
-    networks:
-      - microservicios
-  # OAuth Server
-  oauth-server:
-    build: ./oauth-server
-    container_name: oauth-server
-    ports:
-      - "9000:9000"
+      - ms-config-server
+      - registry-service
+      - postgres
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-    depends_on:
-      registry-service:
-        condition: service_healthy
-      ms-config-server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      - SPRING_PROFILES_ACTIVE=dev
     networks:
       - microservicios
 
-volumes:
-  postgres_data:
+  ms-productos-v2:
+    build:
+      context: .
+      dockerfile: ./ms-productos-v2/Dockerfile
+    container_name: ms-productos-v2
+    ports:
+      - "8083:8083"
+    depends_on:
+      - ms-config-server
+      - registry-service
+      - db_productos
+      - kafka
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    networks:
+      - microservicios
 
 networks:
   microservicios:
     driver: bridge
+
+volumes:
+  postgres_data_productos:
+  postgres_data_pedidos:

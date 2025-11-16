@@ -1,128 +1,127 @@
-# Sistema de Pedidos - Microservicios
+# Sistema de Microservicios: Gestión de Pedidos
 
-Arquitectura de microservicios para gestión de pedidos y productos usando Spring Boot, Spring Cloud y Docker.
+Sistema completo de microservicios desarrollado con Spring Boot, WebFlux, R2DBC, PostgreSQL, Kafka, OAuth2, Config Server, Eureka, Gateway, Prometheus y Grafana.
 
-## Servicios
+## 🚀 Servicios del Sistema
 
-- **API Gateway**: Enrutamiento, balanceo de carga y autenticación OAuth2
-- **Eureka Server**: Registro y descubrimiento de servicios
-- **Config Server**: Configuración centralizada
-- **MS-Productos**: Gestión de catálogo de productos con OAuth2 Resource Server
-- **OAuth Server**: Authorization Server OAuth2 con JWT
-- **PostgreSQL**: Base de datos principal
+### Microservicios de Negocio
 
-## Inicio Rápido
+| Servicio | Puerto | Descripción | Documentación |
+|----------|--------|-------------|---------------|
+| **MS Productos V2** | 8083 | Gestión reactiva de productos con eventos Kafka | [README](ms-productos-v2/README.md) |
+| **MS Pedidos** | 8082 | Gestión reactiva de pedidos con estados | [README](ms-pedidos/README.md) |
+| **OAuth Server** | 9000 | Servidor de autorización OAuth2 con JWT | [README](oauth-server/README.md) |
+
+### Servicios de Infraestructura
+
+| Servicio | Puerto | Descripción | Documentación |
+|----------|--------|-------------|---------------|
+| **Gateway Service** | 8080 | API Gateway con enrutamiento y load balancing | [README](gateway/README.md) |
+| **Config Server** | 8888 | Configuración centralizada con Spring Cloud Config | [README](ms-config-server/README.md) |
+| **Registry Service** | 8761 | Service Registry con Eureka | [README](registry-service/README.md) |
+
+### Infraestructura y Monitoreo
+
+| Componente | Puerto | Descripción |
+|------------|--------|-------------|
+| **Apache Kafka** | 9092 | Platform de streaming de eventos |
+| **PostgreSQL - db_productos** | 5433 | Base de datos para productos |
+| **PostgreSQL - db_pedidos** | 5434 | Base de datos para pedidos |
+| **Prometheus** | 9090 | Sistema de monitoreo y métricas |
+| **Grafana** | 3000 | Dashboard de visualización (admin/admin) |
+
+## 🛠️ Setup Básico
 
 ### Prerrequisitos
+- Java 21+
 - Docker y Docker Compose
-- PostgreSQL corriendo en localhost:5432 (opcional para desarrollo)
+- Git
 
-### Despliegue Completo
+
+### URLs de Acceso Rápido
+
+#### Servicios Principales
+- **Gateway**: http://localhost:8080
+- **MS Productos**: http://localhost:8080/api/productos
+- **MS Pedidos**: http://localhost:8080/api/pedidos
+- **Eureka Registry**: http://localhost:8761
+
+#### Monitoreo
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+
+### Scripts de Utilidad
+
 ```bash
-# Construir y ejecutar todos los servicios
-docker-compose up --build
+# Compilar todos los servicios
+./build.bat
 
-# Ejecutar en segundo plano
-docker-compose up --build -d
+# Iniciar todos los servicios
+./start.bat
+
+# Detener todos los servicios
+./stop.bat
+
+# Limpiar contenedores e imágenes
+./clean.bat
+
+# Ejecutar tests
+./test.bat
 ```
 
-### Verificar Estado
-```bash
-# Estado de contenedores
-docker-compose ps
+## 📚 Enlaces Rápidos
 
-# Logs de servicios
-docker-compose logs [service-name]
+### Documentación de APIs
+
+**MS Productos V2:**
+```bash
+# Crear producto
+curl -X POST http://localhost:8080/api/productos \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Producto","precio":100.0,"stock":10}'
+
+# Listar productos
+curl http://localhost:8080/api/productos
+
+# Productos bajo stock
+curl "http://localhost:8080/api/productos/bajo-stock?minimo=5"
 ```
 
-## Endpoints Principales
+**MS Pedidos:**
+```bash
+# Crear pedido
+curl -X POST http://localhost:8080/api/pedidos \
+  -H "Content-Type: application/json" \
+  -d '{"cliente":{"nombre":"Juan"},"detalles":[{"productoId":1,"cantidad":2}]}'
 
-### API Gateway (puerto 8083)
-- `GET /oauth2/authorization/oauth-client` → Iniciar flujo OAuth2
-- `GET /authorized` → Callback OAuth2 (maneja tokens)
-- `GET /productos` → Listar productos (requiere autenticación)
-- `POST /productos` → Crear producto (requiere autenticación)
-- `GET /productos/{id}` → Obtener producto (requiere autenticación)
-- `PUT /productos/{id}` → Actualizar producto (requiere autenticación)
-- `DELETE /productos/{id}` → Eliminar producto (requiere autenticación)
+# Listar pedidos
+curl http://localhost:8080/api/pedidos
 
-### Eureka Dashboard (puerto 8761)
-- `http://localhost:8761` → Ver servicios registrados
-
-### Config Server (puerto 8888)
-- `http://localhost:8888/{service}/docker` → Ver configuración
-- `http://localhost:8888/oauth-server/docker` → Config OAuth2
-
-### OAuth Server (puerto 9000)
-- `http://localhost:9000/oauth2/authorize` → Autorización OAuth2
-- `http://localhost:9000/oauth2/token` → Obtener tokens JWT
-- `http://localhost:9000/oauth2/jwks` → Claves públicas JWT
-- `http://localhost:9000/userinfo` → Información del usuario
-
-## Configuración Docker
-
-### Variables de Entorno
-- `SPRING_PROFILES_ACTIVE=docker` → Perfil para contenedores
-- `PROPERTIES_DIRECTORY=/config-repo` → Directorio de configs
-
-### Redes y Comunicación
-- **Red**: `microservicios` (Docker bridge)
-- **Nombres de servicio**: Usados para DNS interno
-- **Base de datos**: `host.docker.internal:5432` para acceso local
+# Actualizar estado
+curl -X PUT "http://localhost:8080/api/pedidos/1/estado?estado=CONFIRMADO"
+```
 
 ### Health Checks
-Cada servicio incluye health checks automáticos:
-- PostgreSQL: Verificación de conectividad
-- Servicios: Endpoints `/actuator/health`
-- Timeouts: 30s interval, 10s timeout, 5 retries
 
-## Desarrollo Local
-
-### Sin Docker
 ```bash
-# Iniciar servicios individualmente
-./gradlew bootRun  # En cada directorio
-
+# Verificar estado de todos los servicios
+curl http://localhost:8080/actuator/health        # Gateway
+curl http://localhost:8083/actuator/health        # MS Productos
+curl http://localhost:8082/actuator/health        # MS Pedidos
+curl http://localhost:8888/actuator/health        # Config Server
+curl http://localhost:8761/actuator/health        # Registry Service
 ```
 
-### Con Docker
+### Kafka Events
+
 ```bash
-# Desarrollo completo
-docker-compose up --build
+# Consumir eventos de productos creados
+docker-compose exec kafka kafka-console-consumer \
+  --bootstrap-server kafka:9092 \
+  --topic product-created \
+  --from-beginning
 
-# Solo servicios específicos
-docker-compose up gateway ms-productos
-```
-
-## Notas de Desarrollo
-
-- Los servicios usan perfiles: `dev` (local) y `docker` (contenedores)
-- Base de datos PostgreSQL debe estar accesible en desarrollo
-- Health checks aseguran dependencias antes de iniciar servicios
-- Configuraciones se recargan automáticamente desde config-repo/
-
-## Autenticación OAuth2
-
-### Flujo de Autenticación
-1. **Inicio**: `http://localhost:8083/oauth2/authorization/oauth-client`
-2. **Login**: Usuario `jose` / Password `123456`
-3. **Autorización**: Otorgar permisos (openid, profile)
-4. **Callback**: Redirección automática a aplicación
-5. **Acceso**: API protegida con Bearer Token JWT
-
-### Credenciales OAuth2
-- **Usuario**: `jose` / `123456`
-- **Cliente**: `oauth-client` / `12345678910`
-- **Scopes**: `openid`, `profile`, `read`, `write`
-
-### Testing con Postman
-```bash
-# 1. Obtener token (Password Grant)
-POST http://localhost:9000/oauth2/token
-Authorization: Basic Auth (oauth-client / 12345678910)
-Body: grant_type=password&username=jose&password=123456&scope=read
-
-# 2. Usar token en API
-GET http://localhost:8081/resources/user
-Authorization: Bearer [access_token]
+# Listar topics
+docker-compose exec kafka kafka-topics --list \
+  --bootstrap-server kafka:9092
 ```

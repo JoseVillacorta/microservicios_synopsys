@@ -35,12 +35,6 @@ Authorization Server OAuth2 completo con JWT para microservicios.
 - **Scopes**: `openid`, `profile`
 - **Redirect URIs**: `https://oauthdebugger.com/debug`
 
-## Usuarios de Prueba
-
-- **Username**: `jose`
-- **Password**: `123456`
-- **Authorities**: `USER`
-
 ## Configuración Docker
 
 - **Puerto**: 9000
@@ -54,8 +48,6 @@ Authorization Server OAuth2 completo con JWT para microservicios.
 # Obtener código
 GET http://localhost:9000/oauth2/authorize?response_type=code&client_id=oauth-client&scope=openid%20profile&redirect_uri=http://localhost:8083/authorized
 
-# Login: jose / 123456
-# Copiar código de la URL
 
 # Intercambiar por token
 POST http://localhost:9000/oauth2/token
